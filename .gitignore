@@ -1,0 +1,6 @@
+.clwb/
+.vscode/
+bazel-bin
+bazel-out
+bazel-testlogs
+bazel-timer
