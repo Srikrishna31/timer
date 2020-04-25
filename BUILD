@@ -1,7 +1,6 @@
-config_setting(
-    name = "windows",
-    constraint_values = ["@bazel_tools//platforms:windows"],
-)
+load("@//:config.bzl", "platform_config", "package_copt")
+
+platform_config()
 
 cc_library(
     name = "timer",
@@ -12,18 +11,14 @@ cc_library(
         "src/timer.cpp",
     ],
     strip_include_prefix = "include",
-    copts = select({":windows" : ["/std:c++17"],
-    "//conditions:default" : ["-std=c++17"],}),
+    copts = package_copt,
     visibility = ["//visibility:public"],
 )
 
 cc_test(
     name = "test_timer",
     srcs = ["test/test_timer.cpp"],
-    copts = select({":windows" : ["/std:c++17"],
-                    "//conditions:default" : ["-std=c++17"],
-                }
-    ),
+    copts = package_copt,
     tags = ["unit"],
     deps = [
         ":timer",
