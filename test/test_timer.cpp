@@ -3,19 +3,9 @@
 ///
 #include <atomic>
 #include <condition_variable>
+#include <mutex>
 #include <gtest/gtest.h>
 #include "timer.h"
-
-using namespace std::chrono_literals;
-
-void WaitForCondition(std::function<bool()> predicate)
-{
-    auto cv = std::condition_variable{};
-    auto lock = std::mutex{};
-    auto ulk = std::unique_lock{lock};
-
-    cv.wait(ulk, predicate);
-}
 
 class TimerShould : public ::testing::Test
 {
@@ -42,20 +32,25 @@ TEST_F(TimerShould, SubscribeCallbackAndVerifyCounterValue)
     auto counter = 0;
     const auto expected = 10;
     SetUp(1);
-    auto stop = std::atomic{false};
+    auto stop = false;
+    auto cv = std::condition_variable{};
     timer_->SubscribeTimerCallback(
-        [&counter, &stop, &expected]() {
+        [&counter, &stop, &expected, &cv]() {
             if (!stop)
             {
                 counter++;
-                std::cout << "Counter value: " << counter << std::endl;
                 stop = (counter == expected);
+                if (stop)
+                    cv.notify_one();
             }
         },
         2);
+
     timer_->Start();
 
-    timer::WaitForDuration(100);
+    auto dummy_lock = std::mutex{};
+    auto ulk = std::unique_lock{dummy_lock};
+    cv.wait(ulk);
 
     ASSERT_EQ(counter, expected);
 }
@@ -66,23 +61,37 @@ TEST_F(TimerShould, SubscribeTwoCallbacksAndVerifyCounterValues)
     auto counter2 = 0;
     const auto expected1 = 10;
     const auto expected2 = 20;
+    auto cv = std::condition_variable{};
+
+    auto finish = [&counter1, &counter2, &cv, &expected1, &expected2](){
+                if (counter1 == expected1 && counter2 == expected2)
+                    cv.notify_one();
+    };
+
     SetUp(1);
     timer_->SubscribeTimerCallback(
-        [&counter1, expected1]() {
+        [&counter1, &expected1, &finish]() {
             if (counter1 != expected1)
                 counter1++;
+            else
+                finish();
         },
         2);
+
     timer_->Start();
 
     timer_->SubscribeTimerCallback(
-        [&counter2, expected2]() {
+        [&counter2, expected2, &finish]() {
             if (counter2 != expected2)
                 counter2++;
+            else
+                finish();
         },
         3);
 
-    timer::WaitForDuration(100);
+    auto dummy_lock = std::mutex{};
+    auto ulk = std::unique_lock{dummy_lock};
+    cv.wait(ulk);
 
     EXPECT_EQ(counter1, expected1);
     EXPECT_EQ(counter2, expected2);
@@ -106,7 +115,7 @@ TEST_F(TimerShould, SubscribeAndUnsubscribeCallbackAndVerifyCounterValue)
     auto counter = 0;
     const auto expected = 5;
     SetUp(1);
-    auto& tok = timer_->SubscribeTimerCallback([&counter, &expected] { counter++; }, 2);
+    auto& tok = timer_->SubscribeTimerCallback([&counter] { counter++; }, 2);
     timer_->Start();
 
     timer::WaitForDuration(11);
@@ -125,10 +134,7 @@ TEST_F(TimerShould, SubscribeAndStopShouldStopCallback)
     auto callback_called_after_stop = false;
     auto& tok = timer_->SubscribeTimerCallback(
         [&stop, &callback_called_after_stop] {
-            if (stop)
-            {
-                callback_called_after_stop = true;
-            }
+            callback_called_after_stop = stop;
         },
         2);
 
