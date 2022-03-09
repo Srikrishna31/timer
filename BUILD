@@ -1,6 +1,4 @@
-load("@//:config.bzl", "platform_config", "package_copt")
-
-platform_config()
+load("@//:config.bzl", "package_copt")
 
 cc_library(
     name = "timer",

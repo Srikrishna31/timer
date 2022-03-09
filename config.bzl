@@ -1,10 +1,4 @@
 
-def platform_config():
-    native.config_setting(
-        name = "windows",
-        constraint_values = ["@bazel_tools//platforms:windows"],
-        visibility = ["//visibility:public"]
-    )
-
-package_copt = select({":windows" : ["/std:c++17"],
+# The option for windows compiler is specified with a /.
+package_copt = select({"@bazel_tools//platforms:windows" : ["/std:c++17"],
     "//conditions:default" : ["-std=c++17"],})
